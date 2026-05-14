@@ -9,6 +9,27 @@ export default function Home() {
   const { socket, isConnected, history, setHistory } = useSocket();
   const hasFetched = useRef(false);
 
+  const speak = (text: string, onDone?: () => void) => {
+    window.speechSynthesis.cancel();
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.lang = "en-US";
+    utterance.rate = 1.0;
+
+    // 2. This callback is the secret to "Natural Conversation"
+    utterance.onend = () => {
+      if (onDone) onDone();
+    };
+
+    window.speechSynthesis.speak(utterance);
+  };
+  const handleTranscript = (message: string) => {
+    if (!socket.current) return;
+    window.speechSynthesis.cancel();
+    console.log("🎤 Sending transcript:", message);
+    setIsProcessing(true);
+    socket.current.emit("user-message", { message, history });
+  };
   useEffect(() => {
     const s = socket.current;
     if (!s) return;
@@ -18,7 +39,15 @@ export default function Home() {
 
       if (data.updatedHistory) setHistory(data.updatedHistory);
       if (data.tasks) setTasks(data.tasks);
-
+      if (data.text && !data.isSilent) {
+        // Pass a callback to trigger the mic if a follow-up is needed
+        speak(data.text, () => {
+          // Logic: If the AI asked a question, start listening again automatically
+          if (data.text.includes("?") || data.awaitingConfirmation) {
+            handleTranscript(""); // Logic to trigger the mic without a click
+          }
+        });
+      }
       setIsProcessing(false);
     };
     s.on("ai-response", handleAIResponse);
@@ -38,13 +67,6 @@ export default function Home() {
       hasFetched.current = true;
     }
   }, [socket, isConnected]);
-
-  const handleTranscript = (message: string) => {
-    if (!socket.current) return;
-    console.log("🎤 Sending transcript:", message);
-    setIsProcessing(true);
-    socket.current.emit("user-message", { message, history });
-  };
 
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8 flex flex-col items-center">
