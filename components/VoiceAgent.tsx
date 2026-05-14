@@ -22,6 +22,7 @@ const VoiceAgent = forwardRef(
     const [isListening, setIsListening] = useState(false);
     const recognitionRef = useRef<SpeechRecognitionInstance | null>(null);
     const onTranscriptRef = useRef(onTranscript);
+    const silenceTimerRef = useRef<NodeJS.Timeout | null>(null);
 
     useImperativeHandle(ref, () => ({
       startListening: () => {
@@ -54,8 +55,6 @@ const VoiceAgent = forwardRef(
         rec.interimResults = true;
         rec.lang = "en-US";
 
-        let silenceTimer: NodeJS.Timeout;
-
         rec.onstart = () => {
           // Fulfills: "Assistant should stop playback immediately"
           window.speechSynthesis.cancel();
@@ -63,8 +62,8 @@ const VoiceAgent = forwardRef(
         };
 
         rec.onresult = (event: SpeechRecognitionEvent) => {
-          clearTimeout(silenceTimer);
-          // Secondary interruption check [cite: 131, 133]
+          if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
           if (window.speechSynthesis.speaking) {
             window.speechSynthesis.cancel();
           }
@@ -73,7 +72,7 @@ const VoiceAgent = forwardRef(
             .map((result) => result[0].transcript)
             .join("");
 
-          silenceTimer = setTimeout(() => {
+          silenceTimerRef.current = setTimeout(() => {
             if (transcript.trim().length > 2) {
               onTranscriptRef.current(transcript);
               rec.stop();
@@ -83,9 +82,25 @@ const VoiceAgent = forwardRef(
         };
 
         rec.onerror = (event: any) => {
-          console.error("🎤 Speech API Error:", event.error);
-          setIsListening(false);
-          setIsSessionActive(false);
+          if (event.error === "no-speech") {
+            // We don't use console.error here to avoid the Next.js dev overlay.
+            recognitionRef.current?.stop();
+            setIsListening(false);
+            setIsSessionActive(false);
+            return; // Exit early
+          }
+          // console.error("🎤 Speech API Error:", event.error);
+
+          if (event.error === "audio-capture") {
+            // Hardware issues require a harder reset
+            setIsListening(false);
+            setIsSessionActive(false);
+            alert("Microphone capture failed. Please check your permissions.");
+          } else {
+            // For other errors (network, aborted, etc.), kill the session
+            setIsListening(false);
+            setIsSessionActive(false);
+          }
         };
 
         recognitionRef.current = rec;
@@ -93,9 +108,13 @@ const VoiceAgent = forwardRef(
     }, [setIsSessionActive]); // Added dependency
 
     const toggleListening = () => {
-      if (isListening) {
+      if (isListening || isSessionActive) {
+        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+
         recognitionRef.current?.stop();
+        window.speechSynthesis.cancel();
         setIsSessionActive(false); // Fulfills manual stop [cite: 132]
+        setIsListening(false);
       } else {
         recognitionRef.current?.start();
         setIsSessionActive(true); // Begins continuous Al workflow [cite: 28]
@@ -106,31 +125,36 @@ const VoiceAgent = forwardRef(
       <div className="flex flex-col items-center justify-center space-y-4">
         <button
           onClick={toggleListening}
-          disabled={isProcessing}
           className={`relative p-8 rounded-full transition-all ${
-            isListening
-              ? "bg-red-500 scale-110"
+            isSessionActive
+              ? "bg-red-500 scale-110 shadow-[0_0_20px_rgba(239,68,68,0.5)]"
               : "bg-blue-600 hover:bg-blue-700"
-          } ${isProcessing ? "opacity-50 cursor-not-allowed" : ""}`}
+          }`}
         >
-          {isListening && (
+          {/* Keep the Ping animation active as long as the session is live.
+          This visually confirms to the user: "I can hear you right now."
+      */}
+          {isSessionActive && !isProcessing && (
             <div className="absolute inset-0 rounded-full bg-red-500 animate-ping opacity-75" />
           )}
 
-          {isProcessing ? (
+          {isProcessing && isSessionActive ? (
             <Loader2 className="w-8 h-8 text-white animate-spin" />
-          ) : isListening ? (
+          ) : isSessionActive ? (
             <MicOff className="w-8 h-8 text-white relative z-10" />
           ) : (
             <Mic className="w-8 h-8 text-white" />
           )}
         </button>
-        <p className="text-sm font-medium text-slate-400">
-          {isListening
-            ? "Listening..."
-            : isProcessing
-              ? "AI is thinking..."
-              : "Tap to speak"}
+
+        <p className="text-sm font-medium transition-opacity duration-300">
+          <span className={isSessionActive ? "text-red-400" : "text-slate-400"}>
+            {isSessionActive
+              ? isProcessing
+                ? "AI is thinking..."
+                : "I'm listening... speak anytime"
+              : "Tap the mic to start talking"}
+          </span>
         </p>
       </div>
     );

@@ -22,7 +22,7 @@ export default function Home() {
 
     const utterance = new SpeechSynthesisUtterance(text);
     utterance.lang = "en-US";
-    utterance.rate = 1.0;
+    utterance.rate = 1.1;
 
     // 2. This callback is the secret to "Natural Conversation"
     utterance.onend = () => {
@@ -38,6 +38,14 @@ export default function Home() {
     setIsProcessing(true);
     socket.current.emit("user-message", { message, history });
   };
+
+  useEffect(() => {
+    if (!isSessionActive) {
+      setIsProcessing(false);
+      window.speechSynthesis.cancel();
+    }
+  }, [isSessionActive]);
+
   useEffect(() => {
     const s = socket.current;
     if (!s) return;
@@ -45,8 +53,13 @@ export default function Home() {
     const handleAIResponse = (data: any) => {
       console.log("🚀 Global Listener Received:", data);
 
-      if (data.updatedHistory) setHistory(data.updatedHistory);
       if (data.tasks) setTasks(data.tasks);
+      if (data.updatedHistory) setHistory(data.updatedHistory);
+
+      if (!isSessionActive) {
+        setIsProcessing(false);
+        return;
+      }
       if (data.text) {
         // Pass a callback to trigger the mic if a follow-up is needed
         speak(data.text, () => {
