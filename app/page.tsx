@@ -6,8 +6,16 @@ import { useEffect, useRef, useState } from "react";
 export default function Home() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [tasks, setTasks] = useState<any[]>([]); // To store actual DB records
+  const [isSessionActive, setIsSessionActive] = useState(false);
   const { socket, isConnected, history, setHistory } = useSocket();
   const hasFetched = useRef(false);
+  const voiceAgentRef = useRef<{ startListening: () => void } | null>(null);
+
+  const triggerMic = () => {
+    if (voiceAgentRef.current) {
+      voiceAgentRef.current.startListening();
+    }
+  };
 
   const speak = (text: string, onDone?: () => void) => {
     window.speechSynthesis.cancel();
@@ -39,13 +47,16 @@ export default function Home() {
 
       if (data.updatedHistory) setHistory(data.updatedHistory);
       if (data.tasks) setTasks(data.tasks);
-      if (data.text && !data.isSilent) {
+      if (data.text) {
         // Pass a callback to trigger the mic if a follow-up is needed
         speak(data.text, () => {
-          // Logic: If the AI asked a question, start listening again automatically
-          if (data.text.includes("?") || data.awaitingConfirmation) {
-            handleTranscript(""); // Logic to trigger the mic without a click
+          if (isSessionActive || data.awaitingConfirmation) {
+            triggerMic(); // Create this function to restart your VoiceAgent
           }
+          // Logic: If the AI asked a question, start listening again automatically
+          // if (data.text.includes("?") || data.awaitingConfirmation) {
+          //   handleTranscript(""); // Logic to trigger the mic without a click
+          // }
         });
       }
       setIsProcessing(false);
@@ -54,8 +65,7 @@ export default function Home() {
     return () => {
       s.off("ai-response", handleAIResponse);
     };
-    // -----------------------------
-  }, [socket, isConnected]);
+  }, [socket, isConnected, isSessionActive]);
 
   useEffect(() => {
     if (socket.current && isConnected && !hasFetched.current) {
@@ -84,8 +94,11 @@ export default function Home() {
         </header>
 
         <VoiceAgent
+          ref={voiceAgentRef} // 👈 Added this
           onTranscript={handleTranscript}
           isProcessing={isProcessing}
+          isSessionActive={isSessionActive} // 👈 Added this
+          setIsSessionActive={setIsSessionActive} // 👈 Added this
         />
 
         {/* 3. The Visual Reward: The actual task list */}

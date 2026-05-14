@@ -23,6 +23,7 @@ export interface SpeechRecognitionInstance extends EventTarget {
   lang: string;
   onresult: (event: SpeechRecognitionEvent) => void;
   onerror: (event: SpeechRecognitionErrorEvent) => void;
+  onstart: ((this: SpeechRecognitionInstance, ev: Event) => any) | null;
   start(): void;
   stop(): void;
 }
