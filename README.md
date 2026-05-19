@@ -34,7 +34,8 @@ Welcome to the **Voice-Controlled (VC) Task Manager Frontend**! This is a modern
 
 ### Prerequisites
 
-Ensure you have [Node.js](https://nodejs.org/) (v20+ recommended) and `npm` installed.
+- Ensure you have [Node.js](https://nodejs.org/) (v20+ recommended) and `npm` installed.
+- **Browser Compatibility:** This application currently only runs on **Google Chrome** or **Microsoft Edge**.
 
 ### Installation
 

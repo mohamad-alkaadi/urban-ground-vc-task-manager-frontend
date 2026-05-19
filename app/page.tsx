@@ -19,6 +19,8 @@ export default function Home() {
     isConnected, // Connection status (e.g., WebSocket or API status)
     handleTranscript, // Callback function to process raw text into tasks
     voiceAgentRef, // Ref to access internal Canvas/Audio methods in VoiceAgent
+    uiError, // 👈 1. Grab uiError from your core hook
+    setUiError, // 👈 2. Grab the setter to allow closing the banner
   } = useVoiceTasks();
   return (
     <main className="min-h-screen bg-slate-950 text-white p-4 md:p-8 flex flex-col items-center">
@@ -26,6 +28,21 @@ export default function Home() {
         {/* Visual feedback for connection health */}
         <Header isConnected={isConnected} />
 
+        {/* 🚨 Red Error Alert Banner */}
+        {uiError && (
+          <div
+            className="bg-red-100 border-l-4 border-red-500 text-red-700 p-4 flex justify-between items-center"
+            role="alert"
+          >
+            <span>{uiError}</span>
+            <button
+              onClick={() => setUiError?.(null)} // Uses optional chaining in case it isn't returned yet
+              className="bg-none border-none cursor-pointer text-red-700 font-bold"
+            >
+              ✕
+            </button>
+          </div>
+        )}
         {/* The Audio Interface: Handles recording and visualizes the voice stream */}
         <VoiceAgent
           ref={voiceAgentRef}

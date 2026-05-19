@@ -7,7 +7,11 @@ export const useVoiceTasks = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const { socket, isConnected, history, setHistory } = useSocket();
+  const { socket, isConnected, history, setHistory, uiError, setUiError } =
+    useSocket({
+      onTasksConfig: (newTasks) => setTasks(newTasks),
+      onProcessingConfig: (processingState) => setIsProcessing(processingState),
+    });
   const hasFetched = useRef(false);
   const voiceAgentRef = useRef<{ startListening: () => void } | null>(null);
   const { speak } = useVoiceSynthesis();
@@ -80,5 +84,7 @@ export const useVoiceTasks = () => {
     isConnected,
     handleTranscript,
     voiceAgentRef,
+    uiError, // 👈 Added
+    setUiError, // 👈 Added
   };
 };
