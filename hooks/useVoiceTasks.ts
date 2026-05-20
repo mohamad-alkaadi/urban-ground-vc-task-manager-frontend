@@ -1,4 +1,5 @@
-import { useSocket } from "@/hooks/useSocket";
+"use client";
+import { AiResponseData, useSocket } from "@/hooks/useSocket";
 import { TaskType } from "@/types/tasksTypes";
 import { useEffect, useRef, useState } from "react";
 import { useVoiceSynthesis } from "./useVoiceSynthesis";
@@ -7,14 +8,15 @@ export const useVoiceTasks = () => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [tasks, setTasks] = useState<TaskType[]>([]);
   const [isSessionActive, setIsSessionActive] = useState(false);
+
+  // 1. Just call useSocket cleanly, no props needed!
   const { socket, isConnected, history, setHistory, uiError, setUiError } =
-    useSocket({
-      onTasksConfig: (newTasks) => setTasks(newTasks),
-      onProcessingConfig: (processingState) => setIsProcessing(processingState),
-    });
+    useSocket();
+
   const hasFetched = useRef(false);
   const voiceAgentRef = useRef<{ startListening: () => void } | null>(null);
   const { speak } = useVoiceSynthesis();
+
   const triggerMic = () => {
     if (voiceAgentRef.current) {
       voiceAgentRef.current.startListening();
@@ -24,7 +26,6 @@ export const useVoiceTasks = () => {
   const handleTranscript = (message: string) => {
     if (!socket.current) return;
     window.speechSynthesis.cancel();
-    console.log("🎤 Sending transcript:", message);
     setIsProcessing(true);
     socket.current.emit("user-message", { message, history });
   };
@@ -40,9 +41,22 @@ export const useVoiceTasks = () => {
     const s = socket.current;
     if (!s) return;
 
-    const handleAIResponse = (data: any) => {
-      console.log("🚀 Global Listener Received:", data);
+    const handleAIResponse = (data: AiResponseData) => {
+      // 🚨 INTERCEPT BACKEND ERRORS
+      if (data.error) {
+        setIsProcessing(false);
+        setIsSessionActive(false);
+        setUiError(data.text); // 👈 Show red banner
+        window.speechSynthesis.cancel();
 
+        if (data.text) {
+          speak(data.text, () => {});
+        }
+        return;
+      }
+
+      // --- Normal Success Path ---
+      setUiError(null); // 👈 Clear any previous errors on success
       if (data.tasks) setTasks(data.tasks);
       if (data.updatedHistory) setHistory(data.updatedHistory);
 
@@ -50,6 +64,7 @@ export const useVoiceTasks = () => {
         setIsProcessing(false);
         return;
       }
+
       if (data.text) {
         speak(data.text, () => {
           if (isSessionActive || data.awaitingConfirmation) {
@@ -59,15 +74,15 @@ export const useVoiceTasks = () => {
       }
       setIsProcessing(false);
     };
+
     s.on("ai-response", handleAIResponse);
     return () => {
       s.off("ai-response", handleAIResponse);
     };
-  }, [socket, isConnected, isSessionActive]);
+  }, [socket, isConnected, isSessionActive, speak, setHistory, setUiError]);
 
   useEffect(() => {
     if (socket.current && isConnected && !hasFetched.current) {
-      console.log("📡 Requesting initial task list...");
       socket.current.emit("user-message", {
         message: "get all my tasks",
         history: [],
@@ -84,7 +99,7 @@ export const useVoiceTasks = () => {
     isConnected,
     handleTranscript,
     voiceAgentRef,
-    uiError, // 👈 Added
-    setUiError, // 👈 Added
+    uiError,
+    setUiError,
   };
 };
